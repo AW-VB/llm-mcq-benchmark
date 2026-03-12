@@ -13,7 +13,7 @@ Assignment-aligned defaults:
 - Defaults to full dataset unless --limit is specified
 
 Example:
-    python benchmark_modified.py \
+    python llm_benchmark.py \
         --models tinyllama qwen25_3b deepseek_r1_1p5b qwen3_4b \
         --tasks commonsenseqa openbookqa piqa \
         --prompt-styles baseline constrained fewshot \
