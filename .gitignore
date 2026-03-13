@@ -1,2 +1,5 @@
 hf_cache/
 logs/
+*.json
+*.jsonl
+*.csv
