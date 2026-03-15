@@ -131,18 +131,22 @@ def parse_predicted_label(text: str, valid_labels: set[str]) -> str | None:
     candidates = []
 
     if lines:
-        # First try the last non-empty line.
+        # Prefer the tail of the output, but also inspect the first line because
+        # some models answer with "E. walked" and then continue with a truncated
+        # explanation on later lines.
         candidates.append(lines[-1])
-
-        # Then try the last two non-empty lines joined together.
         if len(lines) >= 2:
             candidates.append(" ".join(lines[-2:]))
+        candidates.append(lines[0])
     else:
         candidates.append(cleaned)
 
     patterns = [
         # A / (A) / A. / **A** / **A
         rf"^\*{{0,2}}\(?({label_group})\)?\*{{0,2}}[\s\.,:;!\?-]*$",
+
+        # A. walked / (B) bank / **C** lots of attention
+        rf"^\*{{0,2}}\(?({label_group})\)?\*{{0,2}}[\s\.,:;!\?-]+.+$",
 
         # Answer: A / Answer is A / Answer is: **A**
         rf"^ANSWER(?:\s+IS)?\s*[:：]?\s*\*{{0,2}}\(?({label_group})\)?\*{{0,2}}[\s\.,:;!\?-]*$",
