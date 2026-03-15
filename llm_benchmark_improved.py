@@ -144,14 +144,15 @@ def parse_predicted_label(text: str, valid_labels: set[str]) -> str | None:
         # A / (A) / A. / **A** / **A
         rf"^\*{{0,2}}\(?({label_group})\)?\*{{0,2}}[\s\.,:;!\?-]*$",
 
-        # Answer: A / Answer: **A**
-        rf"^ANSWER\s*[:：]?\s*\*{{0,2}}\(?({label_group})\)?\*{{0,2}}[\s\.,:;!\?-]*$",
+        # Answer: A / Answer is A / Answer is: **A**
+        rf"^ANSWER(?:\s+IS)?\s*[:：]?\s*\*{{0,2}}\(?({label_group})\)?\*{{0,2}}[\s\.,:;!\?-]*$",
 
-        # Final answer: A / Final answer: **A**
-        rf"^FINAL\s+ANSWER\s*[:：]?\s*\*{{0,2}}\(?({label_group})\)?\*{{0,2}}[\s\.,:;!\?-]*$",
+        # Final answer: A / Final answer is A / Final answer is: **A**
+        rf"^FINAL\s+ANSWER(?:\s+IS)?\s*[:：]?\s*\*{{0,2}}\(?({label_group})\)?\*{{0,2}}[\s\.,:;!\?-]*$",
 
-        # The correct answer is A / The most appropriate answer is: **A**
-        rf"^.*ANSWER\s+(?:IS|:|：)\s*\*{{0,2}}\(?({label_group})\)?\*{{0,2}}[\s\.,:;!\?-]*$",
+        # The correct answer is A / The correct answer is: **A**
+        # The most appropriate answer is A / The most appropriate answer is: **A**
+        rf"^.*ANSWER(?:\s+IS)?\s*[:：]?\s*\*{{0,2}}\(?({label_group})\)?\*{{0,2}}[\s\.,:;!\?-]*$",
     ]
 
     for candidate in candidates:
