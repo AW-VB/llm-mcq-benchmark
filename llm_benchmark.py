@@ -122,7 +122,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--limit", type=int, default=None, help="Optional subset size for debugging.")
     parser.add_argument("--output-dir", type=str, default="results")
     parser.add_argument("--seed", type=int, default=42)
-    parser.add_argument("--max-new-tokens", type=int, default=6)
+    parser.add_argument(
+        "--max-new-tokens",
+        type=int,
+        default=8,
+        help="Short generation budget for MCQ answering. Default is 8.",
+    )
     parser.add_argument(
         "--dtype",
         choices=["auto", "float16", "bfloat16", "float32"],
@@ -329,38 +334,62 @@ def format_for_model(model_key: str, tokenizer: AutoTokenizer, prompt: str) -> t
 
 
 def parse_predicted_label(text: str, valid_labels: set[str]) -> str | None:
-    if text is None:
+    """
+    Strict parser for short-generation MCQ benchmarking.
+
+    Design goals:
+    - High precision over high recall
+    - Only accept explicit final-answer formats
+    - Focus on the tail of the output
+    - Never guess from long reasoning text
+    """
+    if not text or not valid_labels:
         return None
 
     cleaned = text.strip().upper()
     if not cleaned:
         return None
 
-    sorted_labels = sorted(valid_labels)
-    label_group = "|".join(re.escape(label) for label in sorted_labels)
-    standalone_pattern = rf"\b({label_group})\b"
-    answer_pattern = rf"ANSWER\s*[:：]\s*({label_group})\b"
-    option_pattern = rf"OPTION\s*({label_group})\b"
-    choice_pattern = rf"CHOICE\s*({label_group})\b"
-    exact_pattern = rf"^\(?({label_group})\)?[\s\.,:;!-]*$"
+    labels = sorted(valid_labels)
+    label_group = "|".join(re.escape(label) for label in labels)
+
+    lines = [line.strip() for line in cleaned.splitlines() if line.strip()]
+    candidates = []
+
+    if lines:
+        # Prefer the tail of the output, but also inspect the first line because
+        # some models answer with "E. walked" and then continue with a truncated
+        # explanation on later lines.
+        candidates.append(lines[-1])
+        if len(lines) >= 2:
+            candidates.append(" ".join(lines[-2:]))
+        candidates.append(lines[0])
+    else:
+        candidates.append(cleaned)
 
     patterns = [
-        standalone_pattern,
-        answer_pattern,
-        option_pattern,
-        choice_pattern,
-        exact_pattern,
+        # A / (A) / A. / **A** / **A
+        rf"^\*{{0,2}}\(?({label_group})\)?\*{{0,2}}[\s\.,:;!\?-]*$",
+        # A. walked / (B) bank / **C** lots of attention
+        rf"^\*{{0,2}}\(?({label_group})\)?\*{{0,2}}[\s\.,:;!\?-]+.+$",
+        # Answer: A / Answer is A / Answer is: **A**
+        rf"^ANSWER(?:\s+IS)?\s*[:：]?\s*\*{{0,2}}\(?({label_group})\)?\*{{0,2}}[\s\.,:;!\?-]*$",
+        # Final answer: A / Final answer is A / Final answer is: **A**
+        rf"^FINAL\s+ANSWER(?:\s+IS)?\s*[:：]?\s*\*{{0,2}}\(?({label_group})\)?\*{{0,2}}[\s\.,:;!\?-]*$",
+        # The correct answer is A / The most appropriate answer is A
+        rf"^.*ANSWER(?:\s+IS)?\s*[:：]?\s*\*{{0,2}}\(?({label_group})\)?\*{{0,2}}[\s\.,:;!\?-]*$",
     ]
-    for pattern in patterns:
-        match = re.search(pattern, cleaned)
-        if match:
-            label = match.group(1)
-            if label in valid_labels:
-                return label
 
-    for ch in cleaned:
-        if ch in valid_labels:
-            return ch
+    for candidate in candidates:
+        candidate = candidate.strip()
+        if len(candidate) > 40:
+            continue
+
+        for pattern in patterns:
+            match = re.match(pattern, candidate)
+            if match:
+                return match.group(1)
+
     return None
 
 
